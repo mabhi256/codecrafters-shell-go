@@ -41,15 +41,41 @@ func main() {
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 
-		// Wait for user input
-		input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
-			os.Exit(1)
-		}
-		input = strings.TrimSuffix(input, "\n")
+		i := 0
+		args := []string{}
+		openQuote := false
+		var prevR rune
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			r, _, err := reader.ReadRune()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
+				continue
+			}
 
-		args := strings.Split(input, " ")
+			if r == '\n' {
+				break
+			} else if r == '\'' {
+				openQuote = !openQuote
+			} else if r == ' ' && !openQuote && prevR != ' ' {
+				i++
+			} else if r != ' ' || openQuote {
+				if i == len(args) {
+					args = append(args, "")
+				}
+				args[i] += string(r)
+			}
+			prevR = r
+		}
+		// // Wait for user input
+		// input, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		// if err != nil {
+		// 	fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
+		// 	os.Exit(1)
+		// }
+		// input = strings.TrimSuffix(input, "\n")
+
+		// args := strings.Split(input, " ")
 
 		validCommands := []string{"exit", "echo", "type", "pwd"}
 
@@ -58,7 +84,7 @@ func main() {
 			os.Exit(0)
 
 		case "echo":
-			fmt.Println(input[5:]) // "echo" + " "
+			fmt.Println(strings.Join(args[1:], " ")) // "echo" + " "
 
 		case "type":
 			if slices.Contains(validCommands, args[1]) {
@@ -101,7 +127,7 @@ func main() {
 				cmd.Stdout = os.Stdout
 				cmd.Run()
 			} else {
-				fmt.Println(input + ": command not found")
+				fmt.Println(args[0] + ": command not found")
 			}
 		}
 	}
