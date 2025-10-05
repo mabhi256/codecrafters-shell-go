@@ -24,6 +24,9 @@ func main() {
 		case "exit": // assuming the tester will always pass in 0 as the argument
 			os.Exit(0)
 
+		case "echo":
+			fmt.Println(input[5 : len(input)-1]) // "echo" + " "
+
 		default:
 			fmt.Println(input[:len(input)-1] + ": command not found")
 		}
