@@ -4,10 +4,38 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 )
+
+func getExecPath(command string) (string, bool) {
+	envPath := os.Getenv("PATH")
+	paths := strings.Split(envPath, string(os.PathListSeparator)) // : on Unix, ; on Windows
+
+	found := false
+	var execPath string
+	for _, path := range paths {
+		execPath = filepath.Join(path, command)
+		stat, err := os.Stat(execPath)
+		if os.IsNotExist(err) {
+			continue
+		} else if err == nil {
+			// Owner 	Group	Others
+			// rwx   	rwx   	rwx
+			// 421		421		421
+			if stat.Mode()&0111 != 0 {
+				found = true
+				break
+			}
+		} else {
+			fmt.Println("Stat error for", execPath, ":", err)
+		}
+	}
+
+	return execPath, found
+}
 
 func main() {
 	for {
@@ -35,37 +63,26 @@ func main() {
 		case "type":
 			if slices.Contains(validCommands, args[1]) {
 				fmt.Println(args[1], "is a shell builtin")
+				continue
+			}
+
+			execPath, found := getExecPath(args[1])
+			if found {
+				fmt.Printf("%s is %s\n", args[1], execPath)
 			} else {
-				envPath := os.Getenv("PATH")
-				paths := strings.Split(envPath, string(os.PathListSeparator)) // : on Unix, ; on Windows
-
-				found := false
-				var execPath string
-				for _, path := range paths {
-					execPath = filepath.Join(path, args[1])
-					stat, err := os.Stat(execPath)
-					if os.IsNotExist(err) {
-						continue
-					} else if err == nil {
-						// Owner 	Group	Others
-						// rwx   	rwx   	rwx
-						// 421		421		421
-						if stat.Mode()&0111 != 0 {
-							found = true
-							break
-						}
-					}
-				}
-
-				if found {
-					fmt.Printf("%s is %s\n", args[1], execPath)
-				} else {
-					fmt.Printf("%s: not found\n", args[1])
-				}
+				fmt.Printf("%s: not found\n", args[1])
 			}
 
 		default:
-			fmt.Println(input + ": command not found")
+			_, found := getExecPath(args[0])
+			if found {
+				cmd := exec.Command(args[0], args[1:]...)
+				cmd.Stderr = os.Stderr
+				cmd.Stdout = os.Stdout
+				cmd.Run()
+			} else {
+				fmt.Println(input + ": command not found")
+			}
 		}
 	}
 }
