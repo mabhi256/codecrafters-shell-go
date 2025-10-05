@@ -51,7 +51,7 @@ func main() {
 
 		args := strings.Split(input, " ")
 
-		validCommands := []string{"exit", "echo", "type"}
+		validCommands := []string{"exit", "echo", "type", "pwd"}
 
 		switch args[0] {
 		case "exit": // assuming the tester will always pass in 0 as the argument
@@ -72,6 +72,15 @@ func main() {
 			} else {
 				fmt.Printf("%s: not found\n", args[1])
 			}
+
+		case "pwd":
+			pwd, err := os.Getwd()
+			if err != nil {
+				fmt.Println("Unable to get pwd")
+				continue
+			}
+
+			fmt.Println(pwd)
 
 		default:
 			_, found := getExecPath(args[0])
