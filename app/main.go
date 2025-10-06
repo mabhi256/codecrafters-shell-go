@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 func getExecPath(command string) (string, bool) {
@@ -30,7 +32,7 @@ func getExecPath(command string) (string, bool) {
 				break
 			}
 		} else {
-			fmt.Println("Stat error for", execPath, ":", err)
+			fmt.Printf("Stat error for %s: %s\n", execPath, err.Error())
 		}
 	}
 
@@ -38,8 +40,6 @@ func getExecPath(command string) (string, bool) {
 }
 
 func execute(args []string, outFile *os.File, errFile *os.File) {
-	validCommands := []string{"exit", "echo", "type", "pwd"}
-
 	command := args[0]
 
 	switch command {
@@ -50,7 +50,7 @@ func execute(args []string, outFile *os.File, errFile *os.File) {
 		fmt.Fprintf(outFile, "%s\n", strings.Join(args[1:], " ")) // "echo" + " "
 
 	case "type":
-		if slices.Contains(validCommands, args[1]) {
+		if slices.Contains(inbuiltCommands, args[1]) {
 			fmt.Fprintf(outFile, "%s is a shell builtin\n", args[1])
 			return
 		}
@@ -59,7 +59,7 @@ func execute(args []string, outFile *os.File, errFile *os.File) {
 		if found {
 			fmt.Fprintf(outFile, "%s is %s\n", args[1], execPath)
 		} else {
-			fmt.Fprintf(outFile, "%s: not found\n", args[1])
+			fmt.Fprintf(outFile, "%s: not found\r\n", args[1])
 		}
 
 	case "pwd":
@@ -75,7 +75,7 @@ func execute(args []string, outFile *os.File, errFile *os.File) {
 		if len(args) > 1 && args[1] != "~" {
 			err := os.Chdir(args[1])
 			if err != nil {
-				fmt.Fprintf(errFile, "cd: %s: No such file or directory\n", args[1])
+				fmt.Fprintf(errFile, "cd: %s: No such file or directory\r\n", args[1])
 			}
 		} else {
 			home := os.Getenv("HOME")
@@ -83,6 +83,7 @@ func execute(args []string, outFile *os.File, errFile *os.File) {
 		}
 
 	default:
+		// can use exec.LookPath(command) instead of custom getExecPath(command)
 		_, found := getExecPath(command)
 		if found {
 			var cmd *exec.Cmd
@@ -95,6 +96,7 @@ func execute(args []string, outFile *os.File, errFile *os.File) {
 			cmd.Stderr = errFile
 			cmd.Stdout = outFile
 			cmd.Run()
+			fmt.Print("\r")
 		} else {
 			fmt.Fprintf(outFile, "%s: command not found\n", command)
 		}
@@ -103,15 +105,26 @@ func execute(args []string, outFile *os.File, errFile *os.File) {
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
+
 	for {
+		// switch stdin to 'raw' mode for readline()
+		oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+		if err != nil {
+			panic(err)
+		}
+
 		fmt.Fprint(os.Stdout, "$ ")
 
 		// Wait for user input
-		input, err := reader.ReadString('\n')
+		input, err := readline(reader)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
 			os.Exit(1)
 		}
+		// Resume 'cooked' mode for executing commands
+		term.Restore(int(os.Stdin.Fd()), oldState)
+		fmt.Println()
+		// fmt.Printf("len: %d, input: %s\n", len(input), input)
 
 		tokens := tokenize(input)
 		// fmt.Fprintf(os.Stderr, "tokens: len(%d) %v\n", len(tokens), tokens)
@@ -152,5 +165,13 @@ func main() {
 		}
 
 		execute(args, outFile, errFile)
+
+		// Close files immediately after use
+		if outFile != os.Stdout {
+			outFile.Close()
+		}
+		if errFile != os.Stderr {
+			errFile.Close()
+		}
 	}
 }

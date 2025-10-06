@@ -172,5 +172,7 @@ func tokenize(input string) []Token {
 		}
 	}
 
+	flush()
+
 	return tokens
 }
