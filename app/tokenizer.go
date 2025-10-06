@@ -39,6 +39,13 @@ func tokenize(input string) []Token {
 	state := Normal
 	tokenType := Word
 
+	flush := func() {
+		if curr.Len() > 0 {
+			tokens = append(tokens, Token{Type: tokenType, Value: curr.String()})
+			curr.Reset()
+		}
+	}
+
 	for _, ch := range input {
 		switch state {
 		case Normal:
@@ -50,16 +57,22 @@ func tokenize(input string) []Token {
 			case '\\':
 				state = BackSlash
 			case ' ', '\n':
-				if curr.Len() > 0 {
-					tokens = append(tokens, Token{Type: tokenType, Value: curr.String()})
-					curr.Reset()
-				}
+				flush()
 			case '>':
+				flush()
 				state = RedirectOut
 			case '1':
-				state = RedirectOne
+				if curr.Len() == 0 {
+					state = RedirectOne
+				} else {
+					curr.WriteRune(ch)
+				}
 			case '2':
-				state = RedirectTwo
+				if curr.Len() == 0 {
+					state = RedirectTwo
+				} else {
+					curr.WriteRune(ch)
+				}
 
 			default:
 				curr.WriteRune(ch)
@@ -121,8 +134,7 @@ func tokenize(input string) []Token {
 			curr.WriteRune('1')
 
 			if ch == ' ' || ch == '\n' {
-				tokens = append(tokens, Token{Type: tokenType, Value: curr.String()})
-				curr.Reset()
+				flush()
 			} else {
 				curr.WriteRune(ch)
 			}
@@ -153,8 +165,7 @@ func tokenize(input string) []Token {
 			curr.WriteRune('2')
 
 			if ch == ' ' || ch == '\n' {
-				tokens = append(tokens, Token{Type: tokenType, Value: curr.String()})
-				curr.Reset()
+				flush()
 			} else {
 				curr.WriteRune(ch)
 			}
