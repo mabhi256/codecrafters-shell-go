@@ -37,98 +37,80 @@ func getExecPath(command string) (string, bool) {
 	return execPath, found
 }
 
+func execute(args []string) {
+	validCommands := []string{"exit", "echo", "type", "pwd"}
+
+	switch args[0] {
+	case "exit": // assuming the tester will always pass in 0 as the argument
+		os.Exit(0)
+
+	case "echo":
+		fmt.Println(strings.Join(args[1:], " ")) // "echo" + " "
+
+	case "type":
+		if slices.Contains(validCommands, args[1]) {
+			fmt.Println(args[1], "is a shell builtin")
+			return
+		}
+
+		execPath, found := getExecPath(args[1])
+		if found {
+			fmt.Printf("%s is %s\n", args[1], execPath)
+		} else {
+			fmt.Printf("%s: not found\n", args[1])
+		}
+
+	case "pwd":
+		pwd, err := os.Getwd()
+		if err != nil {
+			fmt.Println("Unable to get pwd")
+			return
+		}
+
+		fmt.Println(pwd)
+
+	case "cd":
+		if len(args) > 1 && args[1] != "~" {
+			err := os.Chdir(args[1])
+			if err != nil {
+				fmt.Printf("cd: %s: No such file or directory\n", args[1])
+			}
+		} else {
+			home := os.Getenv("HOME")
+			os.Chdir(home)
+		}
+
+	default:
+		_, found := getExecPath(args[0])
+		if found {
+			cmd := exec.Command(args[0], args[1:]...)
+			cmd.Stderr = os.Stderr
+			cmd.Stdout = os.Stdout
+			cmd.Run()
+		} else {
+			fmt.Println(args[0] + ": command not found")
+		}
+	}
+}
+
 func main() {
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 
-		i := 0
+		// Wait for user input
+		input, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
+			os.Exit(1)
+		}
+
+		tokens := tokenize(input)
+
 		args := []string{}
-		openQuote := false
-		var prevR rune
-		reader := bufio.NewReader(os.Stdin)
-		for {
-			r, _, err := reader.ReadRune()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
-				continue
-			}
-
-			if r == '\n' {
-				break
-			} else if r == '\'' {
-				openQuote = !openQuote
-			} else if r == ' ' && !openQuote && prevR != ' ' {
-				i++
-			} else if r != ' ' || openQuote {
-				if i == len(args) {
-					args = append(args, "")
-				}
-				args[i] += string(r)
-			}
-			prevR = r
+		for _, token := range tokens {
+			args = append(args, token.Value)
 		}
-		// // Wait for user input
-		// input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-		// if err != nil {
-		// 	fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
-		// 	os.Exit(1)
-		// }
-		// input = strings.TrimSuffix(input, "\n")
 
-		// args := strings.Split(input, " ")
-
-		validCommands := []string{"exit", "echo", "type", "pwd"}
-
-		switch args[0] {
-		case "exit": // assuming the tester will always pass in 0 as the argument
-			os.Exit(0)
-
-		case "echo":
-			fmt.Println(strings.Join(args[1:], " ")) // "echo" + " "
-
-		case "type":
-			if slices.Contains(validCommands, args[1]) {
-				fmt.Println(args[1], "is a shell builtin")
-				continue
-			}
-
-			execPath, found := getExecPath(args[1])
-			if found {
-				fmt.Printf("%s is %s\n", args[1], execPath)
-			} else {
-				fmt.Printf("%s: not found\n", args[1])
-			}
-
-		case "pwd":
-			pwd, err := os.Getwd()
-			if err != nil {
-				fmt.Println("Unable to get pwd")
-				continue
-			}
-
-			fmt.Println(pwd)
-
-		case "cd":
-			if len(args) > 1 && args[1] != "~" {
-				err := os.Chdir(args[1])
-				if err != nil {
-					fmt.Printf("cd: %s: No such file or directory\n", args[1])
-				}
-			} else {
-				home := os.Getenv("HOME")
-				os.Chdir(home)
-			}
-
-		default:
-			_, found := getExecPath(args[0])
-			if found {
-				cmd := exec.Command(args[0], args[1:]...)
-				cmd.Stderr = os.Stderr
-				cmd.Stdout = os.Stdout
-				cmd.Run()
-			} else {
-				fmt.Println(args[0] + ": command not found")
-			}
-		}
+		execute(args)
 	}
 }
