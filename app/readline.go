@@ -57,6 +57,9 @@ func readline(reader *bufio.Reader) (string, error) {
 					}
 					input = []byte(matches[matchIdx] + " ")
 					fmt.Print(string(input))
+				} else {
+					fmt.Printf("%c", 0x07) // bell
+					fmt.Print("\b \b")
 				}
 			}
 
