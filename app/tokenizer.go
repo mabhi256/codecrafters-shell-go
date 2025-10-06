@@ -38,8 +38,8 @@ func tokenize(input string) []Token {
 				state = SingleQuote
 			case '"':
 				state = DoubleQuote
-			// case '\\':
-			// 	state = BackSlash
+			case '\\':
+				state = BackSlash
 			case ' ', '\n':
 				if curr.Len() > 0 {
 					tokens = append(tokens, Token{Type: Word, Value: curr.String()})
@@ -63,6 +63,10 @@ func tokenize(input string) []Token {
 			} else {
 				curr.WriteRune(ch)
 			}
+
+		case BackSlash:
+			curr.WriteRune(ch)
+			state = Normal
 		}
 	}
 
