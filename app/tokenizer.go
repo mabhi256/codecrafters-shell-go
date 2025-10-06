@@ -29,6 +29,7 @@ const (
 	BackSlashDoubleQuote
 	RedirectOut
 	RedirectOne
+	RedirectErr
 	RedirectTwo
 )
 
@@ -57,8 +58,8 @@ func tokenize(input string) []Token {
 				state = RedirectOut
 			case '1':
 				state = RedirectOne
-			// case '2':
-			// 	state = RedirectTwo
+			case '2':
+				state = RedirectTwo
 
 			default:
 				curr.WriteRune(ch)
@@ -116,6 +117,36 @@ func tokenize(input string) []Token {
 			// Not a redirect, add 1 back to curr
 			state = Normal
 			curr.WriteRune('1')
+
+			if ch == ' ' || ch == '\n' {
+				tokens = append(tokens, Token{Type: tokenType, Value: curr.String()})
+				curr.Reset()
+			} else {
+				curr.WriteRune(ch)
+			}
+
+		case RedirectErr:
+			if ch == '>' {
+				// update to append (todo later)
+				continue
+			} else {
+				tokenType = Stderr
+				state = Normal
+
+				if ch != ' ' {
+					curr.WriteRune(ch)
+				}
+			}
+
+		case RedirectTwo:
+			if ch == '>' {
+				state = RedirectErr
+				continue
+			}
+
+			// Not a redirect, add 2 back to curr
+			state = Normal
+			curr.WriteRune('2')
 
 			if ch == ' ' || ch == '\n' {
 				tokens = append(tokens, Token{Type: tokenType, Value: curr.String()})

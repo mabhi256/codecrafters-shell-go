@@ -37,7 +37,7 @@ func getExecPath(command string) (string, bool) {
 	return execPath, found
 }
 
-func execute(args []string, out *os.File) {
+func execute(args []string, outFile *os.File, errFile *os.File) {
 	validCommands := []string{"exit", "echo", "type", "pwd"}
 
 	command := args[0]
@@ -47,35 +47,35 @@ func execute(args []string, out *os.File) {
 		os.Exit(0)
 
 	case "echo":
-		fmt.Fprintf(out, "%s\n", strings.Join(args[1:], " ")) // "echo" + " "
+		fmt.Fprintf(outFile, "%s\n", strings.Join(args[1:], " ")) // "echo" + " "
 
 	case "type":
 		if slices.Contains(validCommands, args[1]) {
-			fmt.Fprintf(out, "%s is a shell builtin\n", args[1])
+			fmt.Fprintf(outFile, "%s is a shell builtin\n", args[1])
 			return
 		}
 
 		execPath, found := getExecPath(args[1])
 		if found {
-			fmt.Fprintf(out, "%s is %s\n", args[1], execPath)
+			fmt.Fprintf(outFile, "%s is %s\n", args[1], execPath)
 		} else {
-			fmt.Fprintf(out, "%s: not found\n", args[1])
+			fmt.Fprintf(outFile, "%s: not found\n", args[1])
 		}
 
 	case "pwd":
 		pwd, err := os.Getwd()
 		if err != nil {
-			fmt.Fprintf(out, "Unable to get pwd\n")
+			fmt.Fprintf(errFile, "Unable to get pwd\n")
 			return
 		}
 
-		fmt.Fprintf(out, "%s\n", pwd)
+		fmt.Fprintf(outFile, "%s\n", pwd)
 
 	case "cd":
 		if len(args) > 1 && args[1] != "~" {
 			err := os.Chdir(args[1])
 			if err != nil {
-				fmt.Fprintf(out, "cd: %s: No such file or directory\n", args[1])
+				fmt.Fprintf(errFile, "cd: %s: No such file or directory\n", args[1])
 			}
 		} else {
 			home := os.Getenv("HOME")
@@ -92,11 +92,11 @@ func execute(args []string, out *os.File) {
 				cmd = exec.Command(command)
 			}
 
-			cmd.Stderr = os.Stderr
-			cmd.Stdout = out
+			cmd.Stderr = errFile
+			cmd.Stdout = outFile
 			cmd.Run()
 		} else {
-			fmt.Fprintf(out, "%s: command not found\n", command)
+			fmt.Fprintf(outFile, "%s: command not found\n", command)
 		}
 	}
 }
@@ -116,14 +116,21 @@ func main() {
 		tokens := tokenize(input)
 		// fmt.Fprintf(os.Stderr, "tokens: len(%d) %v\n", len(tokens), tokens)
 
-		out := os.Stdout
+		outFile := os.Stdout
+		errFile := os.Stderr
 		args := []string{}
 		for _, token := range tokens {
 			switch token.Type {
 			case Word:
 				args = append(args, token.Value)
 			case Stdout:
-				out, err = os.Create(token.Value)
+				outFile, err = os.Create(token.Value)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error creating stdout file: %v\n", err)
+					os.Exit(1)
+				}
+			case Stderr:
+				errFile, err = os.Create(token.Value)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error creating stdout file: %v\n", err)
 					os.Exit(1)
@@ -131,6 +138,6 @@ func main() {
 			}
 		}
 
-		execute(args, out)
+		execute(args, outFile, errFile)
 	}
 }
