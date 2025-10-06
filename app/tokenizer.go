@@ -8,6 +8,10 @@ type TokenType int
 
 const (
 	Word TokenType = iota
+	Stdout
+	Stderr
+	StdoutAppend
+	StderrAppend
 )
 
 type Token struct {
@@ -23,12 +27,16 @@ const (
 	DoubleQuote
 	BackSlash
 	BackSlashDoubleQuote
+	RedirectOut
+	RedirectOne
+	RedirectTwo
 )
 
 func tokenize(input string) []Token {
 	tokens := []Token{}
 	var curr strings.Builder
 	state := Normal
+	tokenType := Word
 
 	for _, ch := range input {
 		switch state {
@@ -42,9 +50,15 @@ func tokenize(input string) []Token {
 				state = BackSlash
 			case ' ', '\n':
 				if curr.Len() > 0 {
-					tokens = append(tokens, Token{Type: Word, Value: curr.String()})
+					tokens = append(tokens, Token{Type: tokenType, Value: curr.String()})
 					curr.Reset()
 				}
+			case '>':
+				state = RedirectOut
+			case '1':
+				state = RedirectOne
+			// case '2':
+			// 	state = RedirectTwo
 
 			default:
 				curr.WriteRune(ch)
@@ -79,6 +93,36 @@ func tokenize(input string) []Token {
 			}
 			curr.WriteRune(ch)
 			state = DoubleQuote
+
+		case RedirectOut:
+			if ch == '>' {
+				// update to append (todo later)
+				continue
+			} else {
+				tokenType = Stdout
+				state = Normal
+
+				if ch != ' ' {
+					curr.WriteRune(ch)
+				}
+			}
+
+		case RedirectOne:
+			if ch == '>' {
+				state = RedirectOut
+				continue
+			}
+
+			// Not a redirect, add 1 back to curr
+			state = Normal
+			curr.WriteRune('1')
+
+			if ch == ' ' || ch == '\n' {
+				tokens = append(tokens, Token{Type: tokenType, Value: curr.String()})
+				curr.Reset()
+			} else {
+				curr.WriteRune(ch)
+			}
 		}
 	}
 

@@ -37,43 +37,45 @@ func getExecPath(command string) (string, bool) {
 	return execPath, found
 }
 
-func execute(args []string) {
+func execute(args []string, out *os.File) {
 	validCommands := []string{"exit", "echo", "type", "pwd"}
 
-	switch args[0] {
+	command := args[0]
+
+	switch command {
 	case "exit": // assuming the tester will always pass in 0 as the argument
 		os.Exit(0)
 
 	case "echo":
-		fmt.Println(strings.Join(args[1:], " ")) // "echo" + " "
+		fmt.Fprintf(out, "%s\n", strings.Join(args[1:], " ")) // "echo" + " "
 
 	case "type":
 		if slices.Contains(validCommands, args[1]) {
-			fmt.Println(args[1], "is a shell builtin")
+			fmt.Fprintf(out, "%s is a shell builtin\n", args[1])
 			return
 		}
 
 		execPath, found := getExecPath(args[1])
 		if found {
-			fmt.Printf("%s is %s\n", args[1], execPath)
+			fmt.Fprintf(out, "%s is %s\n", args[1], execPath)
 		} else {
-			fmt.Printf("%s: not found\n", args[1])
+			fmt.Fprintf(out, "%s: not found\n", args[1])
 		}
 
 	case "pwd":
 		pwd, err := os.Getwd()
 		if err != nil {
-			fmt.Println("Unable to get pwd")
+			fmt.Fprintf(out, "Unable to get pwd\n")
 			return
 		}
 
-		fmt.Println(pwd)
+		fmt.Fprintf(out, "%s\n", pwd)
 
 	case "cd":
 		if len(args) > 1 && args[1] != "~" {
 			err := os.Chdir(args[1])
 			if err != nil {
-				fmt.Printf("cd: %s: No such file or directory\n", args[1])
+				fmt.Fprintf(out, "cd: %s: No such file or directory\n", args[1])
 			}
 		} else {
 			home := os.Getenv("HOME")
@@ -81,36 +83,54 @@ func execute(args []string) {
 		}
 
 	default:
-		_, found := getExecPath(args[0])
+		_, found := getExecPath(command)
 		if found {
-			cmd := exec.Command(args[0], args[1:]...)
+			var cmd *exec.Cmd
+			if len(args) > 1 {
+				cmd = exec.Command(command, args[1:]...)
+			} else {
+				cmd = exec.Command(command)
+			}
+
 			cmd.Stderr = os.Stderr
-			cmd.Stdout = os.Stdout
+			cmd.Stdout = out
 			cmd.Run()
 		} else {
-			fmt.Println(args[0] + ": command not found")
+			fmt.Fprintf(out, "%s: command not found\n", command)
 		}
 	}
 }
 
 func main() {
+	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 
 		// Wait for user input
-		input, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		input, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
 			os.Exit(1)
 		}
 
 		tokens := tokenize(input)
+		// fmt.Fprintf(os.Stderr, "tokens: len(%d) %v\n", len(tokens), tokens)
 
+		out := os.Stdout
 		args := []string{}
 		for _, token := range tokens {
-			args = append(args, token.Value)
+			switch token.Type {
+			case Word:
+				args = append(args, token.Value)
+			case Stdout:
+				out, err = os.Create(token.Value)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error creating stdout file: %v\n", err)
+					os.Exit(1)
+				}
+			}
 		}
 
-		execute(args)
+		execute(args, out)
 	}
 }
