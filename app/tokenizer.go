@@ -58,15 +58,27 @@ func tokenize(input string) []Token {
 			}
 
 		case DoubleQuote:
-			if ch == '"' {
+			switch ch {
+			case '"':
 				state = Normal
-			} else {
+			case '\\':
+				state = BackSlashDoubleQuote
+			default:
 				curr.WriteRune(ch)
 			}
 
 		case BackSlash:
 			curr.WriteRune(ch)
 			state = Normal
+
+		case BackSlashDoubleQuote:
+			// Backslash inside double quotes only escapes " and \ (for this challenge)
+			// If ch is neither of those, add the \ back to curr
+			if ch != '"' && ch != '\\' {
+				curr.WriteRune('\\')
+			}
+			curr.WriteRune(ch)
+			state = DoubleQuote
 		}
 	}
 
