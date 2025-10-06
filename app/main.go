@@ -132,7 +132,20 @@ func main() {
 			case Stderr:
 				errFile, err = os.Create(token.Value)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error creating stdout file: %v\n", err)
+					fmt.Fprintf(os.Stderr, "Error creating stderr file: %v\n", err)
+					os.Exit(1)
+				}
+			case StdoutAppend:
+				// os.Create is O_RDWR|O_CREATE|O_TRUNC
+				outFile, err = os.OpenFile(token.Value, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error opening stdout file: %v\n", err)
+					os.Exit(1)
+				}
+			case StderrAppend:
+				errFile, err = os.OpenFile(token.Value, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error opening stderr file: %v\n", err)
 					os.Exit(1)
 				}
 			}

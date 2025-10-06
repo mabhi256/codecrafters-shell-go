@@ -97,7 +97,9 @@ func tokenize(input string) []Token {
 
 		case RedirectOut:
 			if ch == '>' {
-				// update to append (todo later)
+				tokenType = StdoutAppend
+				state = Normal
+
 				continue
 			} else {
 				tokenType = Stdout
@@ -127,7 +129,9 @@ func tokenize(input string) []Token {
 
 		case RedirectErr:
 			if ch == '>' {
-				// update to append (todo later)
+				tokenType = StderrAppend
+				state = Normal
+
 				continue
 			} else {
 				tokenType = Stderr
