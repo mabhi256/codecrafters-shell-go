@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -17,6 +18,31 @@ func findMatchingCmd(partial string) []string {
 			matches = append(matches, cmd)
 		}
 	}
+
+	envPath := os.Getenv("PATH")
+	paths := strings.SplitSeq(envPath, string(os.PathListSeparator)) // : on Unix, ; on Windows
+
+	for path := range paths {
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			continue
+		}
+
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.Name(), partial) {
+				info, err := entry.Info()
+				if err != nil {
+					continue
+				}
+
+				if !info.IsDir() && info.Mode()&0111 != 0 {
+					matches = append(matches, entry.Name())
+				}
+			}
+		}
+	}
+
+	slices.Sort(matches)
 	return matches
 }
 
@@ -90,5 +116,3 @@ func readline(reader *bufio.Reader) (string, error) {
 
 	}
 }
-
-// todo: check paths for completion, keep in mind trailing / for dir/sub-dir or dir/file etc
