@@ -7,12 +7,12 @@ import (
 type TokenType int
 
 const (
-	Word TokenType = iota
-	Stdout
-	Stderr
-	StdoutAppend
-	StderrAppend
+	Word     TokenType = iota
+	Redirect           // >, >>, 1>, 2>, 1>>, 2>>
+	Pipe
 )
+
+// todo: handle redirection '&>file' and '>file 2>&1'
 
 type Token struct {
 	Type  TokenType
@@ -27,10 +27,7 @@ const (
 	DoubleQuote
 	BackSlash
 	BackSlashDoubleQuote
-	RedirectOut
-	RedirectOne
-	RedirectErr
-	RedirectTwo
+	Pipeline
 )
 
 func tokenize(input string) []Token {
@@ -46,7 +43,9 @@ func tokenize(input string) []Token {
 		}
 	}
 
-	for _, ch := range input {
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+
 		switch state {
 		case Normal:
 			switch ch {
@@ -60,29 +59,36 @@ func tokenize(input string) []Token {
 				flush()
 			case '>':
 				flush()
-				state = RedirectOut
-			case '1':
-				if curr.Len() == 0 {
-					state = RedirectOne
+				// check for >>
+				if i+1 < len(input) && input[i+1] == '>' {
+					tokens = append(tokens, Token{Type: Redirect, Value: ">>"})
+					i++
 				} else {
-					curr.WriteRune(ch)
+					tokens = append(tokens, Token{Type: Redirect, Value: ">"})
 				}
-			case '2':
-				if curr.Len() == 0 {
-					state = RedirectTwo
+			case '1', '2':
+				if i+1 < len(input) && input[i+1] == '>' {
+					flush()
+					if i+2 < len(input) && input[i+2] == '>' {
+						tokens = append(tokens, Token{Type: Redirect, Value: string(ch) + ">>"})
+						i += 2
+					} else {
+						tokens = append(tokens, Token{Type: Redirect, Value: string(ch) + ">"})
+						i++
+					}
 				} else {
-					curr.WriteRune(ch)
+					curr.WriteByte(ch)
 				}
 
 			default:
-				curr.WriteRune(ch)
+				curr.WriteByte(ch)
 			}
 
 		case SingleQuote:
 			if ch == '\'' {
 				state = Normal
 			} else {
-				curr.WriteRune(ch)
+				curr.WriteByte(ch)
 			}
 
 		case DoubleQuote:
@@ -92,82 +98,30 @@ func tokenize(input string) []Token {
 			case '\\':
 				state = BackSlashDoubleQuote
 			default:
-				curr.WriteRune(ch)
+				curr.WriteByte(ch)
 			}
 
 		case BackSlash:
-			curr.WriteRune(ch)
+			curr.WriteByte(ch)
 			state = Normal
 
 		case BackSlashDoubleQuote:
 			// Backslash inside double quotes only escapes " and \ (for this challenge)
 			// If ch is neither of those, add the \ back to curr
 			if ch != '"' && ch != '\\' {
-				curr.WriteRune('\\')
+				curr.WriteByte('\\')
 			}
-			curr.WriteRune(ch)
+			curr.WriteByte(ch)
 			state = DoubleQuote
 
-		case RedirectOut:
-			if ch == '>' {
-				tokenType = StdoutAppend
-				state = Normal
-
-				continue
-			} else {
-				tokenType = Stdout
-				state = Normal
-
-				if ch != ' ' {
-					curr.WriteRune(ch)
-				}
-			}
-
-		case RedirectOne:
-			if ch == '>' {
-				state = RedirectOut
-				continue
-			}
-
-			// Not a redirect, add 1 back to curr
+		default:
 			state = Normal
-			curr.WriteRune('1')
 
 			if ch == ' ' || ch == '\n' {
 				flush()
 			} else {
-				curr.WriteRune(ch)
-			}
-
-		case RedirectErr:
-			if ch == '>' {
-				tokenType = StderrAppend
-				state = Normal
-
-				continue
-			} else {
-				tokenType = Stderr
-				state = Normal
-
-				if ch != ' ' {
-					curr.WriteRune(ch)
-				}
-			}
-
-		case RedirectTwo:
-			if ch == '>' {
-				state = RedirectErr
-				continue
-			}
-
-			// Not a redirect, add 2 back to curr
-			state = Normal
-			curr.WriteRune('2')
-
-			if ch == ' ' || ch == '\n' {
-				flush()
-			} else {
-				curr.WriteRune(ch)
+				tokenType = Word
+				curr.WriteByte(ch)
 			}
 		}
 	}
