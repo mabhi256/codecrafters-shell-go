@@ -172,11 +172,20 @@ func readline(reader *bufio.Reader) (string, bool, error) {
 
 				if len(matches) > 0 {
 					if isCmd {
-						if len(matches) == 1 {
+						nextMatchId := (matchIdx + 1) % len(matches)
+
+						// If current match is a prefix of the next match, show it immediately
+						// else ring a bell and then show options
+						// If len(matches) is 1, the the next and the current matches are same
+						if strings.HasPrefix(matches[nextMatchId], matches[matchIdx]) {
 							for range len(partial) {
 								fmt.Print("\b \b")
 							}
-							input = []byte(matches[matchIdx] + " ")
+							input = []byte(matches[matchIdx])
+
+							if len(matches) == 1 {
+								input = append(input, ' ')
+							}
 							fmt.Print(string(input))
 							cursorPos = len(input)
 						} else {
