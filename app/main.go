@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"golang.org/x/term"
@@ -111,9 +112,19 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 			}
 
 		case "history":
+			n := len(history)
+			if len(args) == 2 {
+				n, err = strconv.Atoi(args[1])
+				if err != nil {
+					fmt.Fprintf(errFile, "history %s: Invalid argument, not a number\r\n", args[1])
+					continue
+				}
+			}
 			var output strings.Builder
-			for i, item := range history {
-				line := fmt.Sprintf("    %d  %s\r\n", i+1, item)
+
+			for i := 0; i < n; i++ {
+				idx := len(history) - n + i
+				line := fmt.Sprintf("    %d  %s\r\n", idx+1, history[idx])
 				output.WriteString(line)
 			}
 
