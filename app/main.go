@@ -75,7 +75,7 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 
 		case "type":
 			output := ""
-			if slices.Contains(inbuiltCommands, args[1]) {
+			if slices.Contains(builtinCommands, args[1]) {
 				output = fmt.Sprintf("%s is a shell builtin\n", args[1])
 			} else {
 				execPath, found := getExecPath(args[1])
@@ -107,6 +107,8 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 				home := os.Getenv("HOME")
 				os.Chdir(home)
 			}
+
+		case "history":
 
 		default:
 			// can use exec.LookPath(command) instead of custom getExecPath(command)

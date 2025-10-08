@@ -9,14 +9,14 @@ import (
 	"strings"
 )
 
-var inbuiltCommands = []string{"exit", "echo", "type", "pwd"}
+var builtinCommands = []string{"exit", "echo", "type", "pwd", "history"}
 
 func findMatchingCmd(partial string) []string {
 	// fmt.Printf("partial: %s\r\n", partial)
 	seen := map[string]bool{}
 
 	var matches []string
-	for _, cmd := range inbuiltCommands {
+	for _, cmd := range builtinCommands {
 		if strings.HasPrefix(cmd, partial) {
 			matches = append(matches, cmd)
 		}
