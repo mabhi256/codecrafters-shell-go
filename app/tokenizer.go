@@ -27,7 +27,6 @@ const (
 	DoubleQuote
 	BackSlash
 	BackSlashDoubleQuote
-	Pipeline
 )
 
 func tokenize(input string) []Token {
@@ -79,6 +78,8 @@ func tokenize(input string) []Token {
 				} else {
 					curr.WriteByte(ch)
 				}
+			case '|':
+				tokens = append(tokens, Token{Type: Pipe, Value: "|"})
 
 			default:
 				curr.WriteByte(ch)

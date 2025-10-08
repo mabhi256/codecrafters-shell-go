@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,67 +41,94 @@ func getExecPath(command string) (string, bool) {
 	return execPath, found
 }
 
-func execute(args []string, outFile *os.File, errFile *os.File) {
-	command := args[0]
+func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
+	var inFile io.ReadCloser
+	var err error
+	var cmds []*exec.Cmd
 
-	switch command {
-	case "exit": // assuming the tester will always pass in 0 as the argument
-		os.Exit(0)
+	for i, args := range pipeline {
+		command := args[0]
 
-	case "echo":
-		fmt.Fprintf(outFile, "%s\n", strings.Join(args[1:], " ")) // "echo" + " "
+		switch command {
+		case "exit": // assuming the tester will always pass in 0 as the argument
+			os.Exit(0)
 
-	case "type":
-		if slices.Contains(inbuiltCommands, args[1]) {
-			fmt.Fprintf(outFile, "%s is a shell builtin\n", args[1])
-			return
-		}
+		case "echo":
+			fmt.Fprintf(outFile, "%s\n", strings.Join(args[1:], " ")) // "echo" + " "
 
-		execPath, found := getExecPath(args[1])
-		if found {
-			fmt.Fprintf(outFile, "%s is %s\n", args[1], execPath)
-		} else {
-			fmt.Fprintf(outFile, "%s: not found\r\n", args[1])
-		}
-
-	case "pwd":
-		pwd, err := os.Getwd()
-		if err != nil {
-			fmt.Fprintf(errFile, "Unable to get pwd\n")
-			return
-		}
-
-		fmt.Fprintf(outFile, "%s\n", pwd)
-
-	case "cd":
-		if len(args) > 1 && args[1] != "~" {
-			err := os.Chdir(args[1])
-			if err != nil {
-				fmt.Fprintf(errFile, "cd: %s: No such file or directory\r\n", args[1])
+		case "type":
+			if slices.Contains(inbuiltCommands, args[1]) {
+				fmt.Fprintf(outFile, "%s is a shell builtin\n", args[1])
+				return
 			}
-		} else {
-			home := os.Getenv("HOME")
-			os.Chdir(home)
-		}
 
-	default:
-		// can use exec.LookPath(command) instead of custom getExecPath(command)
-		_, found := getExecPath(command)
-		if found {
-			var cmd *exec.Cmd
-			if len(args) > 1 {
-				cmd = exec.Command(command, args[1:]...)
+			execPath, found := getExecPath(args[1])
+			if found {
+				fmt.Fprintf(outFile, "%s is %s\n", args[1], execPath)
 			} else {
-				cmd = exec.Command(command)
+				fmt.Fprintf(outFile, "%s: not found\r\n", args[1])
 			}
 
-			cmd.Stderr = errFile
-			cmd.Stdout = outFile
-			cmd.Run()
-			fmt.Print("\r")
-		} else {
-			fmt.Fprintf(outFile, "%s: command not found\n", command)
+		case "pwd":
+			pwd, err := os.Getwd()
+			if err != nil {
+				fmt.Fprintf(errFile, "Unable to get pwd\n")
+				return
+			}
+
+			fmt.Fprintf(outFile, "%s\n", pwd)
+
+		case "cd":
+			if len(args) > 1 && args[1] != "~" {
+				err = os.Chdir(args[1])
+				if err != nil {
+					fmt.Fprintf(errFile, "cd: %s: No such file or directory\r\n", args[1])
+				}
+			} else {
+				home := os.Getenv("HOME")
+				os.Chdir(home)
+			}
+
+		default:
+			// can use exec.LookPath(command) instead of custom getExecPath(command)
+			_, found := getExecPath(command)
+			if found {
+				var cmd *exec.Cmd
+				if len(args) > 1 {
+					cmd = exec.Command(command, args[1:]...)
+				} else {
+					cmd = exec.Command(command)
+				}
+
+				if inFile == nil {
+					cmd.Stdin = os.Stdin
+				} else {
+					cmd.Stdin = inFile
+				}
+				cmd.Stderr = errFile
+
+				if i == len(pipeline)-1 {
+					// Last command: output goes to outFile
+					cmd.Stdout = outFile
+				} else {
+					// create pipe for next command
+					inFile, err = cmd.StdoutPipe()
+					if err != nil {
+						log.Fatalf("Error creating stdout pipe for cmd: %v", err)
+					}
+				}
+				cmd.Start()
+				fmt.Print("\r")
+				cmds = append(cmds, cmd)
+			} else {
+				fmt.Fprintf(outFile, "%s: command not found\n", command)
+			}
 		}
+	}
+
+	// Wait for all commands to finish
+	for _, cmd := range cmds {
+		cmd.Wait()
 	}
 }
 
@@ -135,39 +164,9 @@ func main() {
 		tokens := tokenize(input)
 		// fmt.Fprintf(os.Stderr, "tokens: len(%d) %v\n", len(tokens), tokens)
 
-		outFile := os.Stdout
-		errFile := os.Stderr
-		args := []string{}
-		var prev Token
-		for _, token := range tokens {
-			switch token.Type {
-			case Word:
-				if prev.Type == Redirect {
-					switch prev.Value {
-					case ">", "1>":
-						outFile, err = os.Create(token.Value)
-					case "2>":
-						errFile, err = os.Create(token.Value)
-					case ">>", "1>>":
-						// os.Create is O_RDWR|O_CREATE|O_TRUNC
-						outFile, err = os.OpenFile(token.Value, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-					case "2>>":
-						errFile, err = os.OpenFile(token.Value, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-					}
+		pipeline, outFile, errFile := parse(tokens)
 
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "Error creating stdout/stderr file: %v\n", err)
-						os.Exit(1)
-					}
-				} else {
-					args = append(args, token.Value)
-				}
-			case Redirect:
-			}
-			prev = token
-		}
-
-		execute(args, outFile, errFile)
+		execute(pipeline, outFile, errFile)
 
 		// Close files immediately after use
 		if outFile != os.Stdout {
