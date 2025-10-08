@@ -108,6 +108,7 @@ func readline(reader *bufio.Reader) (string, error) {
 	var prefix []byte
 	var matches []string
 	matchIdx := 0
+	isCmd := false
 
 	for {
 		ch, err := reader.ReadByte()
@@ -145,7 +146,9 @@ func readline(reader *bufio.Reader) (string, error) {
 					if shouldCompleteCmd(string(input)) {
 						matches = findMatchingCmd(partial)
 						prefix = nil
+						isCmd = true
 					} else {
+						isCmd = false
 						if len(input) > 0 && input[len(input)-1] == ' ' {
 							prefix = input
 							partial = ""
@@ -163,12 +166,21 @@ func readline(reader *bufio.Reader) (string, error) {
 				}
 
 				if len(matches) > 0 {
-					for range len(input) {
-						fmt.Print("\b \b")
+					if isCmd {
+						for range len(partial) {
+							fmt.Print("\b \b")
+						}
+						input = []byte(matches[matchIdx] + " ")
+						fmt.Print(string(input))
+						cursorPos = len(input)
+					} else {
+						for range len(input) {
+							fmt.Print("\b \b")
+						}
+						input = append(prefix, []byte(matches[matchIdx])...)
+						fmt.Print(string(input))
+						cursorPos = len(input)
 					}
-					input = append(prefix, []byte(matches[matchIdx])...)
-					fmt.Print(string(input))
-					cursorPos = len(input)
 				} else {
 					fmt.Printf("%c", 0x07) // bell
 				}
