@@ -106,6 +106,7 @@ func execute(args []string, outFile *os.File, errFile *os.File) {
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 
+	contCmd := ""
 	for {
 		// switch stdin to 'raw' mode for readline()
 		oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
@@ -113,14 +114,19 @@ func main() {
 			panic(err)
 		}
 
-		fmt.Fprint(os.Stdout, "$ ")
+		fmt.Fprintf(os.Stdout, "$ %s", contCmd)
 
 		// Wait for user input
-		input, err := readline(reader)
+		input, shouldContinue, err := readline(reader)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
 			os.Exit(1)
 		}
+		if shouldContinue {
+			contCmd = input
+			continue
+		}
+
 		// Resume 'cooked' mode for executing commands
 		term.Restore(int(os.Stdin.Fd()), oldState)
 		fmt.Println()

@@ -22,6 +22,10 @@ func findMatchingCmd(partial string) []string {
 		}
 	}
 
+	if len(matches) > 0 {
+		return matches
+	}
+
 	envPath := os.Getenv("PATH")
 	paths := strings.SplitSeq(envPath, string(os.PathListSeparator)) // : on Unix, ; on Windows
 
@@ -102,18 +106,19 @@ func shouldCompleteCmd(input string) bool {
 	return true
 }
 
-func readline(reader *bufio.Reader) (string, error) {
+func readline(reader *bufio.Reader) (string, bool, error) {
 	cursorPos := 0
 	var input []byte
 	var prefix []byte
 	var matches []string
 	matchIdx := 0
 	isCmd := false
+	matchAlert := false
 
 	for {
 		ch, err := reader.ReadByte()
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 
 		switch ch {
@@ -167,12 +172,26 @@ func readline(reader *bufio.Reader) (string, error) {
 
 				if len(matches) > 0 {
 					if isCmd {
-						for range len(partial) {
-							fmt.Print("\b \b")
+						if len(matches) == 1 {
+							for range len(partial) {
+								fmt.Print("\b \b")
+							}
+							input = []byte(matches[matchIdx] + " ")
+							fmt.Print(string(input))
+							cursorPos = len(input)
+						} else {
+							if !matchAlert {
+								fmt.Print("\a")
+								matchAlert = true
+							} else {
+								matchAlert = false
+								fmt.Print("\r\n")
+								fmt.Print(strings.Join(matches, "  "))
+								fmt.Print("\r\n")
+
+								return string(input), true, nil
+							}
 						}
-						input = []byte(matches[matchIdx] + " ")
-						fmt.Print(string(input))
-						cursorPos = len(input)
 					} else {
 						for range len(input) {
 							fmt.Print("\b \b")
@@ -182,7 +201,7 @@ func readline(reader *bufio.Reader) (string, error) {
 						cursorPos = len(input)
 					}
 				} else {
-					fmt.Printf("%c", 0x07) // bell
+					fmt.Print("\a") // bell, 0x07
 				}
 			}
 
@@ -190,7 +209,7 @@ func readline(reader *bufio.Reader) (string, error) {
 			if len(input) > 0 {
 				matches = nil
 				matchIdx = 0
-				return string(input), nil
+				return string(input), false, nil
 			}
 
 		case 23: // Ctrl+W
