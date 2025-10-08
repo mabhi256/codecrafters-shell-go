@@ -114,7 +114,7 @@ func readline(reader *bufio.Reader) (string, bool, error) {
 	matchIdx := 0
 	isCmd := false
 	matchAlert := false
-	historyIdx := len(history) - 1
+	historyIdx := len(history)
 	prev := ""
 
 	for {
@@ -259,16 +259,33 @@ func readline(reader *bufio.Reader) (string, bool, error) {
 			if seq[0] == '[' {
 				switch seq[1] {
 				case 'A': // Up
-					if historyIdx >= 0 {
+					if historyIdx > 0 {
+						for range len(input) {
+							fmt.Print("\b \b")
+						}
+
+						historyIdx--
+						prev = history[historyIdx]
+
+						fmt.Print(prev)
+						cursorPos = len(prev)
+						input = []byte(prev)
+					}
+
+				case 'B': // Down
+					if historyIdx < len(history)-1 {
 						for range len(prev) {
 							fmt.Print("\b \b")
 						}
+
+						historyIdx++
 						prev = history[historyIdx]
-						historyIdx--
+
 						fmt.Print(prev)
 						cursorPos = len(prev)
+						input = []byte(prev)
 					}
-				case 'B': // Down
+
 				case 'C': // Right
 					if cursorPos < len(input) {
 						fmt.Print("\x1b[C") // ANSI code to move cursor right
