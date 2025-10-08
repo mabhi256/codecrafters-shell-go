@@ -46,28 +46,47 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 	var err error
 	var cmds []*exec.Cmd
 
+	handleBuiltinOutput := func(output string, isLastCommand bool) {
+		if isLastCommand {
+			fmt.Fprint(outFile, output)
+		} else {
+			reader, writer, err := os.Pipe()
+			if err != nil {
+				fmt.Fprintf(errFile, "Error creating pipe: %v\n", err)
+				return
+			}
+			fmt.Fprint(writer, output)
+			writer.Close()
+			inFile = reader
+		}
+	}
+
 	for i, args := range pipeline {
 		command := args[0]
+		isLastCommand := i == len(pipeline)-1
 
 		switch command {
 		case "exit": // assuming the tester will always pass in 0 as the argument
 			os.Exit(0)
 
 		case "echo":
-			fmt.Fprintf(outFile, "%s\n", strings.Join(args[1:], " ")) // "echo" + " "
+			output := fmt.Sprintf("%s\n", strings.Join(args[1:], " ")) // "echo" + " "
+			handleBuiltinOutput(output, isLastCommand)
 
 		case "type":
+			output := ""
 			if slices.Contains(inbuiltCommands, args[1]) {
-				fmt.Fprintf(outFile, "%s is a shell builtin\n", args[1])
-				return
+				output = fmt.Sprintf("%s is a shell builtin\n", args[1])
+			} else {
+				execPath, found := getExecPath(args[1])
+				if found {
+					output = fmt.Sprintf("%s is %s\n", args[1], execPath)
+				} else {
+					output = fmt.Sprintf("%s: not found\r\n", args[1])
+				}
 			}
 
-			execPath, found := getExecPath(args[1])
-			if found {
-				fmt.Fprintf(outFile, "%s is %s\n", args[1], execPath)
-			} else {
-				fmt.Fprintf(outFile, "%s: not found\r\n", args[1])
-			}
+			handleBuiltinOutput(output, isLastCommand)
 
 		case "pwd":
 			pwd, err := os.Getwd()
@@ -76,7 +95,7 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 				return
 			}
 
-			fmt.Fprintf(outFile, "%s\n", pwd)
+			handleBuiltinOutput(pwd+"\n", isLastCommand)
 
 		case "cd":
 			if len(args) > 1 && args[1] != "~" {
@@ -107,7 +126,7 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 				}
 				cmd.Stderr = errFile
 
-				if i == len(pipeline)-1 {
+				if isLastCommand {
 					// Last command: output goes to outFile
 					cmd.Stdout = outFile
 				} else {
