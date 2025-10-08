@@ -116,15 +116,28 @@ func readline(reader *bufio.Reader) (string, error) {
 		}
 
 		switch ch {
-		case 3: // ctrl+C
+		case 1: // Crtl+A
+			if cursorPos > 0 {
+				fmt.Printf("\x1b[%dD", cursorPos) // move cursor left by cursorPos units
+				cursorPos = 0
+			}
+
+		case 3: // Ctrl+C
 			fmt.Println("^C")
 			os.Exit(0)
 
-		case 4: // ctrl + D (EOF)
+		case 4: // Ctrl+D (EOF)
 			if len(input) == 0 {
 				fmt.Println()
 				os.Exit(0)
 			}
+
+		case 5: // Crtl+E
+			if cursorPos < len(input) {
+				fmt.Printf("\x1b[%dC", len(input)-cursorPos) // move cursor right
+				cursorPos = len(input)
+			}
+
 		case '\t': // 9 - tab
 			if len(input) > 0 {
 				partial := string(input)
@@ -168,6 +181,30 @@ func readline(reader *bufio.Reader) (string, error) {
 				return string(input), nil
 			}
 
+		case 23: // Ctrl+W
+			if cursorPos > 0 {
+				startPos := cursorPos - 1
+
+				// skip trailing spaces
+				for startPos > 0 && input[startPos] == ' ' {
+					startPos--
+				}
+				// find the last word
+				for startPos > 0 && input[startPos-1] != ' ' {
+					startPos--
+				}
+
+				deleted := cursorPos - startPos
+				input = append(input[:startPos], input[cursorPos:]...)
+
+				fmt.Printf("\x1b[%dD", deleted)                     // Move cursor back to where deletion started
+				fmt.Print(string(input[startPos:]))                 // Print remaining text
+				fmt.Print(strings.Repeat(" ", deleted))             // Overwrite old chars (which have now moved left after deletion)
+				fmt.Printf("\x1b[%dD", len(input)-startPos+deleted) // Move the cursor back after writing the remaining text + spaces
+
+				cursorPos = startPos
+			}
+
 		case 27: // ESC - arrow keys start with this
 			// Read the next two bytes for arrow key sequences
 			seq := make([]byte, 2)
@@ -193,8 +230,20 @@ func readline(reader *bufio.Reader) (string, error) {
 					}
 				case 'D': // Left
 					if cursorPos > 0 {
-						fmt.Print("\x1b[D") // ANSI code to move cursor right
+						fmt.Print("\x1b[D") // ANSI code to move cursor left
 						cursorPos--
+					}
+
+				case 'H': // Home key (ESC [ H)
+					if cursorPos > 0 {
+						fmt.Printf("\x1b[%dD", cursorPos)
+						cursorPos = 0
+					}
+
+				case 'F': // End key (ESC [ F)
+					if cursorPos < len(input) {
+						fmt.Printf("\x1b[%dC", len(input)-cursorPos)
+						cursorPos = len(input)
 					}
 				}
 			}
