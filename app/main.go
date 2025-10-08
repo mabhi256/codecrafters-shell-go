@@ -14,6 +14,8 @@ import (
 	"golang.org/x/term"
 )
 
+var history = []string{}
+
 func getExecPath(command string) (string, bool) {
 	envPath := os.Getenv("PATH")
 	paths := strings.Split(envPath, string(os.PathListSeparator)) // : on Unix, ; on Windows
@@ -109,6 +111,13 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 			}
 
 		case "history":
+			var output strings.Builder
+			for i, item := range history {
+				line := fmt.Sprintf("    %d  %s\r\n", i+1, item)
+				output.WriteString(line)
+			}
+
+			handleBuiltinOutput(output.String(), isLastCommand)
 
 		default:
 			// can use exec.LookPath(command) instead of custom getExecPath(command)
@@ -172,6 +181,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
 			os.Exit(1)
 		}
+		history = append(history, input)
 		if shouldContinue {
 			contCmd = input
 			continue
