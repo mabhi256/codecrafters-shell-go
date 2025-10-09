@@ -126,6 +126,21 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 						line := scanner.Text()
 						history = append(history, line)
 					}
+				} else if args[1] == "-w" {
+					file, err := os.Create(args[2])
+					if err != nil {
+						fmt.Fprintf(errFile, "Unable to open file: %s\r\n", args[2])
+						continue
+					}
+					defer file.Close()
+
+					for _, item := range history {
+						_, err := fmt.Fprintf(file, "%s\n", item)
+						if err != nil {
+							fmt.Fprintf(errFile, "Unable to write to file: %s\r\n", args[2])
+							continue
+						}
+					}
 				}
 			} else {
 				n := len(history)
