@@ -16,6 +16,7 @@ import (
 )
 
 var history = []string{}
+var historyAppendIdx = 0
 
 func getExecPath(command string) (string, bool) {
 	envPath := os.Getenv("PATH")
@@ -141,6 +142,23 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 							continue
 						}
 					}
+				} else if args[1] == "-a" {
+					file, err := os.OpenFile(args[2], os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+					if err != nil {
+						fmt.Fprintf(errFile, "Unable to open file: %s\r\n", args[2])
+						continue
+					}
+					defer file.Close()
+
+					for i := historyAppendIdx; i < len(history); i++ {
+						item := history[i]
+						_, err := fmt.Fprintf(file, "%s\n", item)
+						if err != nil {
+							fmt.Fprintf(errFile, "Unable to write to file: %s\r\n", args[2])
+							continue
+						}
+					}
+					historyAppendIdx = len(history)
 				}
 			} else {
 				n := len(history)
