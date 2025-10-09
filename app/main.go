@@ -112,23 +112,40 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 			}
 
 		case "history":
-			n := len(history)
-			if len(args) == 2 {
-				n, err = strconv.Atoi(args[1])
-				if err != nil {
-					fmt.Fprintf(errFile, "history %s: Invalid argument, not a number\r\n", args[1])
-					continue
+			if len(args) == 3 {
+				if args[1] == "-r" {
+					file, err := os.Open(args[2])
+					if err != nil {
+						fmt.Fprintf(errFile, "Unable to open file: %s\r\n", args[2])
+						continue
+					}
+					defer file.Close()
+
+					scanner := bufio.NewScanner(file)
+					for scanner.Scan() {
+						line := scanner.Text()
+						history = append(history, line)
+					}
 				}
-			}
-			var output strings.Builder
+			} else {
+				n := len(history)
+				if len(args) == 2 {
+					n, err = strconv.Atoi(args[1])
+					if err != nil {
+						fmt.Fprintf(errFile, "history %s: Invalid argument, not a number\r\n", args[1])
+						continue
+					}
+				}
+				var output strings.Builder
 
-			for i := 0; i < n; i++ {
-				idx := len(history) - n + i
-				line := fmt.Sprintf("    %d  %s\r\n", idx+1, history[idx])
-				output.WriteString(line)
-			}
+				for i := 0; i < n; i++ {
+					idx := len(history) - n + i
+					line := fmt.Sprintf("    %d  %s\r\n", idx+1, history[idx])
+					output.WriteString(line)
+				}
 
-			handleBuiltinOutput(output.String(), isLastCommand)
+				handleBuiltinOutput(output.String(), isLastCommand)
+			}
 
 		default:
 			// can use exec.LookPath(command) instead of custom getExecPath(command)
