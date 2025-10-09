@@ -17,6 +17,7 @@ import (
 
 var history = []string{}
 var historyAppendIdx = 0
+var histFile = os.Getenv("HISTFILE")
 
 func getExecPath(command string) (string, bool) {
 	envPath := os.Getenv("PATH")
@@ -71,6 +72,22 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 
 		switch command {
 		case "exit": // assuming the tester will always pass in 0 as the argument
+			if histFile != "" {
+				file, err := os.Create(histFile)
+				if err != nil {
+					fmt.Fprintf(errFile, "Unable to open file: %s\r\n", histFile)
+					continue
+				}
+				defer file.Close()
+
+				for _, item := range history {
+					_, err := fmt.Fprintf(file, "%s\n", item)
+					if err != nil {
+						fmt.Fprintf(errFile, "Unable to write to file: %s\r\n", histFile)
+						continue
+					}
+				}
+			}
 			os.Exit(0)
 
 		case "echo":
@@ -224,7 +241,6 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 }
 
 func main() {
-	histFile := os.Getenv("HISTFILE")
 	if histFile != "" {
 		file, err := os.Open(histFile)
 		if err != nil {
@@ -256,8 +272,8 @@ func main() {
 		// Wait for user input
 		input, shouldContinue, err := readline(reader)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+			continue
 		}
 		history = append(history, input)
 		if shouldContinue {

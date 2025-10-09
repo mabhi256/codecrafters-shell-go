@@ -33,7 +33,7 @@ func parse(tokens []Token) ([][]string, *os.File, *os.File) {
 
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error creating stdout/stderr file: %v\n", err)
-					os.Exit(1)
+					return nil, nil, nil
 				}
 			} else {
 				pipeline[cmdIdx] = append(pipeline[cmdIdx], token.Value)
