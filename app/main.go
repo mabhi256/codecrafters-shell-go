@@ -224,6 +224,23 @@ func execute(pipeline [][]string, outFile *os.File, errFile *os.File) {
 }
 
 func main() {
+	histFile := os.Getenv("HISTFILE")
+	if histFile != "" {
+		file, err := os.Open(histFile)
+		if err != nil {
+			fmt.Println("unable to open history file")
+			os.Exit(1)
+		}
+		defer file.Close()
+
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := scanner.Text()
+			history = append(history, line)
+		}
+
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	contCmd := ""
